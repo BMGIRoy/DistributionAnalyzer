@@ -46,6 +46,8 @@ dist_info = [
 ]
 
 # --- Prepare Transformations ---
+# Raw series
+y_raw = series
 # Box-Cox (positive data)
 try:
     lam = boxcox_normmax(y_raw + 1e-8)
@@ -55,8 +57,15 @@ except Exception:
     y_box = None
     box_label = None
 # Yeo-Johnson
+
 y_john = PowerTransformer(method='yeo-johnson').fit_transform(y_raw.reshape(-1,1)).flatten()
 john_label = "Yeo-Johnson"
+
+# Map transforms for easy lookup
+transform_map = {'Raw': y_raw}
+if y_box is not None:
+    transform_map[box_label] = y_box
+transform_map[john_label] = y_john
 
 # --- Fit & Evaluate Function ---
 def evaluate_fits(y, transform_label):
@@ -136,7 +145,7 @@ except Exception:
 ax1.set_title('Raw Data')
 ax1.legend()
 # Right: transformed data with best-fit PDF & CI
-y2 = transform_map.get(best.Transform, y_raw)
+y2 = transform_map.get(best['Transform'], y_raw)
 dist2 = getattr(stats, best.Alias)
 params2 = best.Params
 ax2.hist(y2, bins=30, density=True, alpha=0.6)
@@ -163,6 +172,6 @@ st.write([round(float(p),4) for p in preds])
 # --- Final Histogram ---
 st.subheader("Final Data Histogram")
 fig2, ax3 = plt.subplots(figsize=(6,3))
-ax3.hist(y_trans, bins=30, density=True, alpha=0.6, edgecolor='black')
+ax3.hist(y2, bins=30, density=True, alpha=0.6, edgecolor='black')
 ax3.set_title(f"{best['Distribution']} after {best['Transform']}")
 st.pyplot(fig2)
