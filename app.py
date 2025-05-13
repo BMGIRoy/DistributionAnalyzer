@@ -64,7 +64,13 @@ if uploaded_file:
             df_raw = pd.DataFrame(raw_results)
             df_raw['AD_sort'] = df_raw['AD'].fillna(df_raw['AD'].max() * 10)
             best_raw = df_raw.sort_values(['AD_sort', 'p_value'], ascending=[True, False]).iloc[0]
+            # Prepare display values for best raw
+            raw_display_ad = f"{best_raw['AD']:.4f}" if not np.isnan(best_raw['AD']) else "N/A"
+            raw_p_value = best_raw['p_value']
             st.write(
+                f"Best raw fit: **{best_raw['name']}** "
+                f"(AD={raw_display_ad}, p-value={raw_p_value:.4f})"
+            )
                 f"Best raw fit: **{best_raw['name']}** "
                 f"(AD={best_raw['AD']:.4f if not np.isnan(best_raw['AD']) else 'N/A'}, "
                 f"p-value={best_raw['p_value']:.4f})"
@@ -112,7 +118,12 @@ if uploaded_file:
         st.pyplot(fig)
 
         # Report final best fit
+        final_display_ad = f"{best_raw['AD']:.4f}" if not np.isnan(best_raw['AD']) else "N/A"
+        final_p_value = best_raw['p_value']
         st.success(
+            f"**Best Fit**: {best_raw['name']} "
+            f"(AD={final_display_ad}, p-value={final_p_value:.4f})"
+        )(
             f"**Best Fit**: {best_raw['name']} "
             f"(AD={best_raw['AD']:.4f if not np.isnan(best_raw['AD']) else 'N/A'}, "
             f"p-value={best_raw['p_value']:.4f})"
