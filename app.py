@@ -68,11 +68,22 @@ def evaluate_fits(y, transform_label):
         try:
             dist = getattr(stats, alias)
             params = dist.fit(y, **kwargs)
-            # Anderson-Darling
-            try:
-                ad_stat = anderson(y, dist=alias).statistic
-            except Exception:
-                ad_stat = np.nan
+            # Anderson-Darling for uniform by manual calculation
+            if alias == 'uniform':
+                loc, scale = params[0], params[1]
+                # transform to [0,1]
+                u = np.sort((y - loc) / scale)
+                n = len(u)
+                # clip to avoid log(0)
+                u = np.clip(u, 1e-10, 1 - 1e-10)
+                i = np.arange(1, n+1)
+                ad_stat = -n - np.sum((2*i - 1) * (np.log(u) + np.log(1 - u[::-1]))) / n
+            else:
+                # Anderson-Darling for supported distributions
+                try:
+                    ad_stat = anderson(y, dist=alias).statistic
+                except Exception:
+                    ad_stat = np.nan
             # KS test
             ks_stat, ks_p = kstest(y, alias, args=params)
             results.append({
