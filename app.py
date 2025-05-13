@@ -111,42 +111,54 @@ best = res_df.sort_values(['AD_sort','KS_p'], ascending=[True,False]).iloc[0]
 
 st.success(f"🏆 Best Fit: {best['Distribution']} after {best['Transform']} (AD={best['AD_stat']:.4f}, p-value={best['KS_p']:.4f})")
 
-# --- Side-by-Side Raw vs Transformed Normal Fit with 95% CI ---
-st.subheader("Raw vs Transformed Data with Normal Fit and 95% CI")
-fig, (ax1, ax2) = plt.subplots(1,2, figsize=(12,4))
-# Raw data
-mu, sigma = np.mean(y_raw), np.std(y_raw, ddof=1)
-xv = np.linspace(mu-3*sigma, mu+3*sigma, 200)
-ax1.hist(y_raw, bins=30, density=True, alpha=0.6)
-ax1.plot(xv, stats.norm.pdf(xv, mu, sigma), 'r-', label='Normal PDF')
-ci_low, ci_high = stats.norm.interval(0.95, mu, sigma)
-ax1.axvline(ci_low, linestyle='--', label='95% CI')
-ax1.axvline(ci_high, linestyle='--')
+# --- Side-by-Side Raw vs Transformed with Best-Fit PDF and 95% CI ---
+st.subheader("Raw vs Transformed with Best-Fit PDF & 95% CI")
+fig, (ax1, ax2) = plt.subplots(1,2, figsize=(10,4))
+# Left: raw data with best-fit PDF & CI if raw transform
+raw_subset = res_df[(res_df.Transform == 'Raw')]
+# find best raw row
+raw_max_ad = raw_subset.AD_stat.max(skipna=True)
+best_raw = raw_subset.assign(AD_sort=raw_subset.AD_stat.fillna(raw_max_ad*10))\
+    .sort_values(['AD_sort','KS_p'], ascending=[True,False]).iloc[0]
+# raw PDF overlay
+y1 = y_raw
+dist1 = getattr(stats, best_raw.Alias)
+params1 = best_raw.Params
+ax1.hist(y1, bins=30, density=True, alpha=0.6)
+x1 = np.linspace(y1.min(), y1.max(), 200)
+ax1.plot(x1, dist1.pdf(x1, *params1), 'r-', label=f"{best_raw.Distribution} PDF")
+try:
+    ci1 = dist1.ppf([0.025,0.975], *params1)
+    ax1.axvline(ci1[0], linestyle='--', label='95% CI')
+    ax1.axvline(ci1[1], linestyle='--')
+except Exception:
+    pass
 ax1.set_title('Raw Data')
 ax1.legend()
-# Transformed data
-# pick the transformed series based on best
-transform_map = {'Raw': y_raw, box_label: y_box, john_label: y_john}
-y_trans = transform_map.get(best['Transform'], y_raw)
-mu2, sigma2 = np.mean(y_trans), np.std(y_trans, ddof=1)
-xv2 = np.linspace(mu2-3*sigma2, mu2+3*sigma2, 200)
-ax2.hist(y_trans, bins=30, density=True, alpha=0.6)
-ax2.plot(xv2, stats.norm.pdf(xv2, mu2, sigma2), 'r-', label='Normal PDF')
-ci2_low, ci2_high = stats.norm.interval(0.95, mu2, sigma2)
-ax2.axvline(ci2_low, linestyle='--', label='95% CI')
-ax2.axvline(ci2_high, linestyle='--')
-ax2.set_title(f"Transformed Data ({best['Transform']})")
+# Right: transformed data with best-fit PDF & CI
+y2 = transform_map.get(best.Transform, y_raw)
+dist2 = getattr(stats, best.Alias)
+params2 = best.Params
+ax2.hist(y2, bins=30, density=True, alpha=0.6)
+x2 = np.linspace(y2.min(), y2.max(), 200)
+ax2.plot(x2, dist2.pdf(x2, *params2), 'r-', label=f"{best.Distribution} PDF")
+try:
+    ci2 = dist2.ppf([0.025,0.975], *params2)
+    ax2.axvline(ci2[0], linestyle='--', label='95% CI')
+    ax2.axvline(ci2[1], linestyle='--')
+except Exception:
+    pass
+ax2.set_title(f"{best.Distribution} after {best.Transform}")
 ax2.legend()
 st.pyplot(fig)
 
 # --- Predicted Future Values ---
 st.subheader("Predicted Next 5 Values")
-# Use best distribution and transform parameters
-best_alias = best['Alias']
-best_params = best['Params']
-dist_best = getattr(stats, best_alias)
-preds = dist_best.rvs(*best_params, size=5)
-st.write([round(float(p), 4) for p in preds])
+# generate predictions using best fit
+dist_best = getattr(stats, best.Alias)
+params_best = best.Params
+preds = dist_best.rvs(*params_best, size=5)
+st.write([round(float(p),4) for p in preds])
 
 # --- Final Histogram ---
 st.subheader("Final Data Histogram")
