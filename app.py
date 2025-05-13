@@ -90,7 +90,7 @@ for col in cols:
         best_raw = None
 
     # Decide transformation
-    if best_raw and best_raw['p_value'] >= 0.05:
+    if best_raw is not None and best_raw['p_value'] >= 0.05:
         x = data
         transform = 'None'
         final_results = raw_results
