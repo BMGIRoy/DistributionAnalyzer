@@ -1,5 +1,5 @@
 # app.py
-# Streamlit app: Unified Distribution Fit Table with AD & KS Tests
+# Streamlit app: Unified Distribution Fit Analyzer
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -28,7 +28,7 @@ if not numeric_cols:
     st.error("No numeric columns found in the uploaded file.")
     st.stop()
 col = st.selectbox("Select column for analysis:", numeric_cols)
-series = data_df[col].dropna().values
+y_raw = data_df[col].dropna().values
 
 # --- Define Distributions ---
 dist_info = [
@@ -37,7 +37,7 @@ dist_info = [
     ('Gamma (2P)', 'gamma', {'floc': 0}),
     ('Gamma (3P)', 'gamma', {}),
     ('Exponential', 'expon', {}),
-    ('Lognormal', 'logN', {}),
+    ('Lognormal', 'lognorm', {}),
     ('Weibull (2P)', 'weibull_min', {'floc': 0}),
     ('Weibull (3P)', 'weibull_min', {}),
     ('Logistic', 'logistic', {}),
@@ -46,9 +46,7 @@ dist_info = [
 ]
 
 # --- Prepare Transformations ---
-y_raw = series
-
-# Box-Cox (positive-only)
+# Box-Cox (positive data)
 try:
     lam = boxcox_normmax(y_raw + 1e-8)
     y_box = boxcox(y_raw + 1e-8, lam)
@@ -56,8 +54,7 @@ try:
 except Exception:
     y_box = None
     box_label = None
-
-# Yeo-Johnson (handles zero/negatives)
+# Yeo-Johnson
 y_john = PowerTransformer(method='yeo-johnson').fit_transform(y_raw.reshape(-1,1)).flatten()
 john_label = "Yeo-Johnson"
 
@@ -68,18 +65,15 @@ def evaluate_fits(y, transform_label):
         try:
             dist = getattr(stats, alias)
             params = dist.fit(y, **kwargs)
-            # Anderson-Darling for uniform by manual calculation
+            # Anderson-Darling
             if alias == 'uniform':
                 loc, scale = params[0], params[1]
-                # transform to [0,1]
                 u = np.sort((y - loc) / scale)
                 n = len(u)
-                # clip to avoid log(0)
-                u = np.clip(u, 1e-10, 1 - 1e-10)
+                u = np.clip(u, 1e-10, 1-1e-10)
                 i = np.arange(1, n+1)
-                ad_stat = -n - np.sum((2*i - 1) * (np.log(u) + np.log(1 - u[::-1]))) / n
+                ad_stat = -n - np.sum((2*i-1)*(np.log(u)+np.log(1-u[::-1])))/n
             else:
-                # Anderson-Darling for supported distributions
                 try:
                     ad_stat = anderson(y, dist=alias).statistic
                 except Exception:
@@ -89,6 +83,8 @@ def evaluate_fits(y, transform_label):
             results.append({
                 'Distribution': name,
                 'Transform': transform_label,
+                'Alias': alias,
+                'Params': params,
                 'AD_stat': ad_stat,
                 'KS_p': ks_p
             })
@@ -106,63 +102,45 @@ all_results += evaluate_fits(y_john, john_label)
 # --- Display Summary Table ---
 res_df = pd.DataFrame(all_results)
 st.subheader("Goodness-of-Fit Summary")
-st.dataframe(res_df)
+st.dataframe(res_df[['Distribution','Transform','AD_stat','KS_p']])
 
 # --- Select Best Fit ---
 max_ad = res_df['AD_stat'].max(skipna=True)
-res_df['AD_sort'] = res_df['AD_stat'].fillna(max_ad * 10)
-best = res_df.sort_values(['AD_sort', 'KS_p'], ascending=[True, False]).iloc[0]
+res_df['AD_sort'] = res_df['AD_stat'].fillna(max_ad*10)
+best = res_df.sort_values(['AD_sort','KS_p'], ascending=[True,False]).iloc[0]
 
-st.success(
-    f"🏆 Best Fit: {best['Distribution']} with {best['Transform']} "
-    f"(AD={best['AD_stat']:.4f}, KS p-value={best['KS_p']:.4f})"
-)
+st.success(f"🏆 Best Fit: {best['Distribution']} after {best['Transform']} (AD={best['AD_stat']:.4f}, p-value={best['KS_p']:.4f})")
 
-# --- Side-by-Side Raw vs Transformed with 95% CI ---
-st.subheader("Raw vs Transformed with 95% Confidence Intervals")
+# --- Side-by-Side Plots with 95% CI ---
+st.subheader("Raw vs Selected Transform with 95% CI")
 fig, (ax1, ax2) = plt.subplots(1,2, figsize=(12,4))
-# Raw data plot
+# Raw data
 mu, sigma = np.mean(y_raw), np.std(y_raw, ddof=1)
-x_vals = np.linspace(mu-3*sigma, mu+3*sigma, 200)
-ax1.hist(y_raw, bins=30, density=True, alpha=0.6, label='Data')
-ax1.plot(x_vals, stats.norm.pdf(x_vals, mu, sigma), 'r-', label='Normal PDF')
-ci_low, ci_high = stats.norm.interval(0.95, loc=mu, scale=sigma)
-ax1.axvline(ci_low, color='k', linestyle='--')
-ax1.axvline(ci_high, color='k', linestyle='--', label='95% CI')
+xv = np.linspace(mu-3*sigma, mu+3*sigma, 200)
+ax1.hist(y_raw, bins=30, density=True, alpha=0.6)
+ax1.plot(xv, stats.norm.pdf(xv, mu, sigma), 'r-')
+ci_low, ci_high = stats.norm.interval(0.95, mu, sigma)
+ax1.axvline(ci_low, linestyle='--'); ax1.axvline(ci_high, linestyle='--')
 ax1.set_title('Raw Data')
-ax1.legend()
-# Transformed data plot
-y_final = {'Raw': y_raw, box_label: y_box, john_label: y_john}.get(best['Transform'], y_raw)
-alias = best['Alias']
-dist = getattr(stats, alias)
-params = best['Params']
-mu2 = None; sigma2 = None
-try:
-    # if normal
-    if alias=='norm': mu2, sigma2 = params
-    else: mu2 = np.mean(y_final); sigma2 = np.std(y_final, ddof=1)
-except: mu2, sigma2 = np.mean(y_final), np.std(y_final, ddof=1)
-x2 = np.linspace(min(y_final), max(y_final), 200)
-ax2.hist(y_final, bins=30, density=True, alpha=0.6, label='Data')
-ax2.plot(x2, dist.pdf(x2, *params), 'r-', label=f'{best["Distribution"]} PDF')
+# Transformed data
+y_sel = {'Raw':y_raw, box_label:y_box, john_label:y_john}[best['Transform']]
+dist = getattr(stats, best['Alias']); params = best['Params']
+x2 = np.linspace(min(y_sel), max(y_sel), 200)
+ax2.hist(y_sel, bins=30, density=True, alpha=0.6)
+ax2.plot(x2, dist.pdf(x2,*params), 'r-')
 ci2 = dist.ppf([0.025,0.975], *params)
-ax2.axvline(ci2[0], color='k', linestyle='--')
-ax2.axvline(ci2[1], color='k', linestyle='--', label='95% CI')
-ax2.set_title(f'{best["Distribution"]} after {best["Transform"]}')
-ax2.legend()
+ax2.axvline(ci2[0], linestyle='--'); ax2.axvline(ci2[1], linestyle='--')
+ax2.set_title(f"{best['Distribution']} after {best['Transform']}")
 st.pyplot(fig)
 
 # --- Predicted Future Values ---
-st.subheader("Predicted Future Values (Next 5)")
-dist_func = getattr(stats, best['Alias'])
-predictions = dist_func.rvs(*best['Params'], size=5)
-st.write([float(f"{p:.4f}") for p in predictions])
+st.subheader("Predicted Next 5 Values")
+preds = dist.rvs(*params, size=5)
+st.write([round(float(p),4) for p in preds])
 
 # --- Final Histogram ---
-transform_map = {'Raw': y_raw, box_label: y_box, john_label: y_john}
-y_final = transform_map.get(best['Transform'], y_raw)
-st.subheader("Histogram of Final Selected Data")
-fig2, ax2 = plt.subplots(figsize=(6,4))
-ax2.hist(y_final, bins=30, density=True, alpha=0.6, color='teal', edgecolor='black')
-ax2.set_title(f"{best['Distribution']} after {best['Transform']}")
+st.subheader("Final Data Histogram")
+fig2, ax3 = plt.subplots(figsize=(6,4))
+ax3.hist(y_sel, bins=30, density=True, alpha=0.6, edgecolor='black')
+ax3.set_title(f"{best['Distribution']} after {best['Transform']}")
 st.pyplot(fig2)
