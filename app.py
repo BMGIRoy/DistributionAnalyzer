@@ -62,11 +62,13 @@ if uploaded_file:
         raw_results = evaluate_fits(data)
         if raw_results:
             for r in raw_results:
-                st.write(f"{r['name']}: AD={r['AD']:.4f if not np.isnan(r['AD']) else 'N/A'}, KS p-value={r['p_value']:.4f}")
+                # Handle possible NaN AD values
+                display_ad = f"{r['AD']:.4f}" if not np.isnan(r['AD']) else "N/A"
+                st.write(f"{r['name']}: AD={display_ad}, KS p-value={r['p_value']:.4f}")
             # Rank raw
             df_raw = pd.DataFrame(raw_results)
             df_raw['AD_sort'] = df_raw['AD'].fillna(df_raw['AD'].max()*10)
-            best_raw = df_raw.sort_values(['AD_sort', 'p_value'], ascending=[True, False]).iloc[0]
+            best_raw = df_raw.sort_values(['AD_sort', 'p_value'], ascending=[True, False]).iloc[0](['AD_sort', 'p_value'], ascending=[True, False]).iloc[0]
             st.write(f"Best raw fit: **{best_raw['name']}** (AD={best_raw['AD']:.4f if not np.isnan(best_raw['AD']) else 'N/A'}, p-value={best_raw['p_value']:.4f})")
         else:
             st.warning("No valid raw fits")
@@ -94,8 +96,9 @@ if uploaded_file:
             st.subheader("Fits on Transformed Data")
             transformed_results = evaluate_fits(x)
             for r in transformed_results:
-                st.write(f"{r['name']}: AD={r['AD']:.4f if not np.isnan(r['AD']) else 'N/A'}, KS p-value={r['p_value']:.4f}")
-            df_tr = pd.DataFrame(transformed_results)
+                display_ad = f"{r['AD']:.4f}" if not np.isnan(r['AD']) else "N/A"
+                st.write(f"{r['name']}: AD={display_ad}, KS p-value={r['p_value']:.4f}")
+            df_tr = pd.DataFrame(transformed_results)(transformed_results)
             df_tr['AD_sort'] = df_tr['AD'].fillna(df_tr['AD'].max()*10)
             best_tr = df_tr.sort_values(['AD_sort', 'p_value'], ascending=[True, False]).iloc[0]
             best_raw = best_tr  # use for final
