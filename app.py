@@ -118,15 +118,45 @@ st.success(
     f"(AD={best['AD_stat']:.4f}, KS p-value={best['KS_p']:.4f})"
 )
 
-# --- Visualize AD vs KS p-value ---
-fig, ax = plt.subplots(figsize=(8, 4))
-for _, row in res_df.iterrows():
-    ax.scatter(row['AD_stat'], row['KS_p'], label=f"{row['Distribution']}\n{row['Transform']}")
-ax.set_xlabel('Anderson-Darling Statistic')
-ax.set_ylabel('KS Test p-value')
-ax.set_title('Fit Comparison')
-ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+# --- Side-by-Side Raw vs Transformed with 95% CI ---
+st.subheader("Raw vs Transformed with 95% Confidence Intervals")
+fig, (ax1, ax2) = plt.subplots(1,2, figsize=(12,4))
+# Raw data plot
+mu, sigma = np.mean(y_raw), np.std(y_raw, ddof=1)
+x_vals = np.linspace(mu-3*sigma, mu+3*sigma, 200)
+ax1.hist(y_raw, bins=30, density=True, alpha=0.6, label='Data')
+ax1.plot(x_vals, stats.norm.pdf(x_vals, mu, sigma), 'r-', label='Normal PDF')
+ci_low, ci_high = stats.norm.interval(0.95, loc=mu, scale=sigma)
+ax1.axvline(ci_low, color='k', linestyle='--')
+ax1.axvline(ci_high, color='k', linestyle='--', label='95% CI')
+ax1.set_title('Raw Data')
+ax1.legend()
+# Transformed data plot
+y_final = {'Raw': y_raw, box_label: y_box, john_label: y_john}.get(best['Transform'], y_raw)
+alias = best['Alias']
+dist = getattr(stats, alias)
+params = best['Params']
+mu2 = None; sigma2 = None
+try:
+    # if normal
+    if alias=='norm': mu2, sigma2 = params
+    else: mu2 = np.mean(y_final); sigma2 = np.std(y_final, ddof=1)
+except: mu2, sigma2 = np.mean(y_final), np.std(y_final, ddof=1)
+x2 = np.linspace(min(y_final), max(y_final), 200)
+ax2.hist(y_final, bins=30, density=True, alpha=0.6, label='Data')
+ax2.plot(x2, dist.pdf(x2, *params), 'r-', label=f'{best["Distribution"]} PDF')
+ci2 = dist.ppf([0.025,0.975], *params)
+ax2.axvline(ci2[0], color='k', linestyle='--')
+ax2.axvline(ci2[1], color='k', linestyle='--', label='95% CI')
+ax2.set_title(f'{best["Distribution"]} after {best["Transform"]}')
+ax2.legend()
 st.pyplot(fig)
+
+# --- Predicted Future Values ---
+st.subheader("Predicted Future Values (Next 5)")
+dist_func = getattr(stats, best['Alias'])
+predictions = dist_func.rvs(*best['Params'], size=5)
+st.write([float(f"{p:.4f}") for p in predictions])
 
 # --- Final Histogram ---
 transform_map = {'Raw': y_raw, box_label: y_box, john_label: y_john}
