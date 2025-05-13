@@ -47,7 +47,7 @@ dist_info = [
 
 # --- Prepare Transformations ---
 # Raw series
-y_raw = series
+y_raw = data_df[col].dropna().values
 # Box-Cox (positive data)
 try:
     lam = boxcox_normmax(y_raw + 1e-8)
