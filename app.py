@@ -37,6 +37,7 @@ dist_info = [
     ('Gamma (2P)', 'gamma', {'floc': 0}),
     ('Gamma (3P)', 'gamma', {}),
     ('Exponential', 'expon', {}),
+    ('Lognormal', 'logN', {}),
     ('Weibull (2P)', 'weibull_min', {'floc': 0}),
     ('Weibull (3P)', 'weibull_min', {}),
     ('Logistic', 'logistic', {}),
