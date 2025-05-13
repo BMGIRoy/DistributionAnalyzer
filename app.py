@@ -141,12 +141,16 @@ st.pyplot(fig)
 
 # --- Predicted Future Values ---
 st.subheader("Predicted Next 5 Values")
-preds = dist.rvs(*params, size=5)
-st.write([round(float(p),4) for p in preds])
+# Use best distribution and transform parameters
+best_alias = best['Alias']
+best_params = best['Params']
+dist_best = getattr(stats, best_alias)
+preds = dist_best.rvs(*best_params, size=5)
+st.write([round(float(p), 4) for p in preds])
 
 # --- Final Histogram ---
 st.subheader("Final Data Histogram")
-fig2, ax3 = plt.subplots(figsize=(6,4))
-ax3.hist(y_sel, bins=30, density=True, alpha=0.6, edgecolor='black')
+fig2, ax3 = plt.subplots(figsize=(6,3))
+ax3.hist(y_trans, bins=30, density=True, alpha=0.6, edgecolor='black')
 ax3.set_title(f"{best['Distribution']} after {best['Transform']}")
 st.pyplot(fig2)
